@@ -128,6 +128,13 @@ export default function DealCard({ listing, initialExpanded = false }) {
             <ScoreRing score={score?.total ?? null} size={64} />
           </div>
 
+          {/* Scoring basis — shown when modelQuery exists so user can verify relevance */}
+          {modelQuery && (
+            <div className="text-xs text-[#4a4040] mb-1">
+              Scoret mot: <span className="text-[#6a6060]">{modelQuery}</span>
+            </div>
+          )}
+
           {/* Verdict */}
           <div className="flex items-center gap-1.5 mb-2">
             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${verdict.dot}`} />
