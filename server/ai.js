@@ -156,4 +156,47 @@ async function aiDealSummary({ title, finnPrice, marketPrice, thomannNew, condit
   }
 }
 
-module.exports = { aiExtractModel, aiInferCondition, aiDealSummary }
+/**
+ * 4. Check whether a finn.no listing is relevant to the user's search intent.
+ *    Used to filter keyword-stuffed dealer listings and finn.no search noise
+ *    before enrichment — so irrelevant listings never burn Reverb/eBay API calls.
+ *
+ *    Fails open: returns true (keep) on any error so we never over-filter.
+ */
+async function aiIsRelevant(searchQuery, listingTitle) {
+  const cacheKey = `ai:relevant:${searchQuery.toLowerCase()}:${listingTitle.toLowerCase().slice(0, 80)}`
+  const cached = cache.get(cacheKey)
+  if (cached !== undefined) return cached
+
+  try {
+    const resp = await getClient().chat.completions.create({
+      model: MODEL(),
+      temperature: 0,
+      max_tokens: 5,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a music gear relevance filter. A user searched for specific gear. ' +
+            'Decide if the listing title matches what they are looking for — same instrument type and compatible brand. ' +
+            'Squier counts as Fender. Epiphone counts as Gibson. Sub-brands are acceptable. ' +
+            'Reply with only YES or NO.',
+        },
+        {
+          role: 'user',
+          content: `Search: "${searchQuery}"\nListing: "${listingTitle}"`,
+        },
+      ],
+    })
+
+    const answer = resp.choices[0]?.message?.content?.trim().toUpperCase()
+    const result = answer !== 'NO' // fail open — anything other than explicit NO is kept
+    cache.set(cacheKey, result)
+    return result
+  } catch (err) {
+    console.error('aiIsRelevant error:', err.message)
+    return true // fail open
+  }
+}
+
+module.exports = { aiExtractModel, aiInferCondition, aiDealSummary, aiIsRelevant }

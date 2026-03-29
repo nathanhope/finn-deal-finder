@@ -11,7 +11,7 @@ const { fetchGear4MusicPrice } = require('./scrapers/gear4music')
 const { fetchEvenstadPrice } = require('./scrapers/evenstad')
 const { calculateDealScore } = require('./scoring')
 const { extractModel } = require('./utils/extractModel')
-const { aiExtractModel, aiInferCondition, aiDealSummary } = require('./ai')
+const { aiExtractModel, aiInferCondition, aiDealSummary, aiIsRelevant } = require('./ai')
 const { getTopDeals, startTopDealsEngine, computeTopDeals } = require('./topDeals')
 
 const AI_ENABLED = !!process.env.OPENAI_API_KEY
@@ -220,7 +220,24 @@ app.get('/api/search', async (req, res) => {
     // Limit to 20 listings to keep response times sane
     listings = listings.slice(0, 20)
 
-    // 3. Enrich each listing with price data + score
+    const searchTokens = q.trim().toLowerCase().split(/\s+/).filter(t => t.length > 2)
+
+    // 3. Pre-enrichment relevance filter — discard listings unrelated to the search
+    // intent before burning Reverb/eBay API calls on them.
+    // Fast lane: if a search token already appears in the title, skip the AI check.
+    // Only call AI for listings with no keyword overlap (the ambiguous cases).
+    if (searchTokens.length >= 2) {
+      const relevance = await Promise.all(
+        listings.map(l => {
+          const titleLower = l.title.toLowerCase()
+          if (searchTokens.some(t => titleLower.includes(t))) return true
+          return AI_ENABLED ? aiIsRelevant(q.trim(), l.title) : false
+        })
+      )
+      listings = listings.filter((_, i) => relevance[i])
+    }
+
+    // 4. Enrich each listing with price data + score
     // Stagger requests 500ms apart to be polite to external APIs
     const enriched = []
     for (let i = 0; i < listings.length; i++) {
@@ -240,21 +257,9 @@ app.get('/api/search', async (req, res) => {
       }
     }
 
-    // 4. Filter query-irrelevant listings
-    // finn.no sometimes returns listings where sellers stuffed unrelated keywords
-    // in descriptions. If none of the user's search tokens appear in the listing
-    // title or extracted model query, discard it.
-    const searchTokens = q.trim().toLowerCase().split(/\s+/).filter(t => t.length > 2)
-    const relevanceFiltered = searchTokens.length >= 2
-      ? enriched.filter(l => {
-          const haystack = (l.title + ' ' + (l.modelQuery || '')).toLowerCase()
-          return searchTokens.some(t => haystack.includes(t))
-        })
-      : enriched
-
     // 5. Apply min score filter
     const minScoreInt = parseInt(minScore, 10) || 0
-    let filtered = relevanceFiltered.filter(l => {
+    let filtered = enriched.filter(l => {
       if (!l.score) return minScoreInt === 0
       return l.score.total >= minScoreInt
     })
