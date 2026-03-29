@@ -1,7 +1,6 @@
-const axios = require('axios')
 const cheerio = require('cheerio')
 const NodeCache = require('node-cache')
-const { proxyUrlRendered } = require('../utils/proxy')
+const { proxyGet } = require('../utils/proxy')
 
 const cache = new NodeCache({ stdTTL: 86400 }) // 24 hours
 
@@ -44,10 +43,10 @@ async function fetchThomannPrice(modelQuery) {
   const cached = cache.get(cacheKey)
   if (cached !== undefined) return cached
 
-  const searchUrl = proxyUrlRendered(`https://www.thomann.de/no/search_dir.html?sw=${encodeURIComponent(modelQuery)}`)
+  const searchUrl = `https://www.thomann.de/no/search_dir.html?sw=${encodeURIComponent(modelQuery)}`
 
   try {
-    const { data } = await axios.get(searchUrl, { headers: HEADERS, timeout: 25000 })
+    const { data } = await proxyGet(searchUrl, { headers: HEADERS, timeout: 25000 }, { render: true })
     const $ = cheerio.load(data)
 
     let newPrice = null
