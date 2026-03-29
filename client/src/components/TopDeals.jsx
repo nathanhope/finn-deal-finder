@@ -15,12 +15,11 @@ function timeAgo(iso) {
 }
 
 const CATEGORIES = [
-  { id: 'all',     label: 'Alle' },
-  { id: 'guitar',  label: 'Gitarer' },
-  { id: 'amp',     label: 'Forsterkere' },
-  { id: 'effects', label: 'Effekter' },
-  { id: 'studio',  label: 'Studio' },
-  { id: 'synth',   label: 'Synth/Keys' },
+  { id: 'all',    label: 'Alle' },
+  { id: 'guitar', label: 'Guitar' },
+  { id: 'bass',   label: 'Bass' },
+  { id: 'pedals', label: 'Pedals' },
+  { id: 'studio', label: 'Studio' },
 ]
 
 function RankBadge({ rank }) {

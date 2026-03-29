@@ -205,17 +205,6 @@ export default function App() {
               <p className="text-[#9a9080] text-sm max-w-md mx-auto leading-relaxed">
                 Hvert treff scores automatisk mot Reverb, eBay og Thomann.
               </p>
-              <div className="mt-4 flex flex-wrap justify-center gap-2">
-                {['Fender Stratocaster', 'UA Apollo', 'Neve 1073', 'Roland TR-8', 'Focusrite Scarlett'].map(s => (
-                  <button
-                    key={s}
-                    onClick={() => handleSearch(s)}
-                    className="text-xs px-3 py-1.5 rounded-full border border-[#2a2a2a] text-[#9a9080] hover:text-amber-400 hover:border-amber-400/30 transition-colors"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
             </div>
             <TopDeals onSelectListing={(listing) => {
               setResults([listing])

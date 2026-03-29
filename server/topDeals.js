@@ -47,28 +47,23 @@ const MAX_PER_TERM = 5
 const CATEGORIES = [
   {
     id: 'guitar',
-    label: 'Gitarer',
-    terms: ['elektrisk gitar', 'akustisk gitar', 'bass gitar', 'halvakustisk gitar', 'archtop gitar'],
+    label: 'Guitar',
+    terms: ['elektrisk gitar', 'halvakustisk gitar', 'archtop gitar', 'akustisk gitar', 'resonatorgitar'],
   },
   {
-    id: 'amp',
-    label: 'Forsterkere',
-    terms: ['gitarforsterker', 'bassforsterker', 'combo forsterker', 'rørforsterker gitar'],
+    id: 'bass',
+    label: 'Bass',
+    terms: ['bassgitar', 'elektrisk bass', 'bass gitar', 'fretless bass'],
   },
   {
-    id: 'effects',
-    label: 'Effekter',
+    id: 'pedals',
+    label: 'Pedals',
     terms: ['effektpedal', 'gitarpedal', 'multieffekt gitar', 'loopstation', 'overdrive pedal'],
   },
   {
     id: 'studio',
     label: 'Studio',
     terms: ['lydkort', 'kondensatormikrofon', 'preamp mikrofon', 'kompressor audio', 'audio interface'],
-  },
-  {
-    id: 'synth',
-    label: 'Synth/Keys',
-    terms: ['synthesizer', 'analog synth', 'digital piano', 'workstation keyboard', 'semi-modulær'],
   },
 ]
 
