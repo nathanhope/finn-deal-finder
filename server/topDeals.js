@@ -38,23 +38,33 @@ const { aiExtractModel, aiInferCondition, aiDealSummary } = require('./ai')
 const AI_ENABLED = !!process.env.OPENAI_API_KEY
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
 
-// Popular gear searched on finn.no — broad mix of guitars, studio, synths, amps
+// Popular gear searched on finn.no — keyed by category for filtered top-deal views
 const POPULAR_SEARCHES = [
-  'Fender Stratocaster',
-  'Gibson Les Paul',
-  'PRS',
-  'Marshall JCM',
-  'Orange Rockerverb',
-  'UA Apollo',
-  'Focusrite Scarlett',
-  'SSL 2',
-  'Neve 1073',
-  'Moog',
-  'Korg Minilogue',
-  'Roland TR-8',
-  'Nord Piano',
-  'Strymon',
-  'Eventide H9',
+  // guitars
+  { query: 'Fender Stratocaster',   category: 'guitar' },
+  { query: 'Gibson Les Paul',        category: 'guitar' },
+  { query: 'PRS',                    category: 'guitar' },
+  { query: 'Telecaster',             category: 'guitar' },
+  { query: 'Fender Jazz Bass',       category: 'guitar' },
+  // amps
+  { query: 'Marshall JCM',           category: 'amp' },
+  { query: 'Orange Rockerverb',      category: 'amp' },
+  { query: 'Fender Blues Junior',    category: 'amp' },
+  { query: 'Mesa Boogie',            category: 'amp' },
+  // effects
+  { query: 'Strymon',                category: 'effects' },
+  { query: 'Eventide H9',            category: 'effects' },
+  { query: 'Chase Bliss',            category: 'effects' },
+  // studio
+  { query: 'UA Apollo',              category: 'studio' },
+  { query: 'Focusrite Scarlett',     category: 'studio' },
+  { query: 'SSL 2',                  category: 'studio' },
+  { query: 'Neve 1073',              category: 'studio' },
+  // synth / keys
+  { query: 'Moog',                   category: 'synth' },
+  { query: 'Korg Minilogue',         category: 'synth' },
+  { query: 'Roland TR-8',            category: 'synth' },
+  { query: 'Nord Piano',             category: 'synth' },
 ]
 
 // In-memory state
@@ -148,6 +158,7 @@ async function enrichListing(listing) {
     condition,
     modelQuery,
     dealSummary,
+    category: listing.category ?? null,
     priceData: {
       reverb: reverbData,
       ebay: ebayData,
@@ -169,20 +180,20 @@ async function computeTopDeals() {
   try {
     // Fetch listings for all keywords in parallel — each keyword's enrichment is staggered internally
     const listingsByKeyword = await Promise.all(
-      POPULAR_SEARCHES.map(kw => fetchFinnListings(kw).catch(() => []))
+      POPULAR_SEARCHES.map(({ query }) => fetchFinnListings(query).catch(() => []))
     )
 
     // Pool + deduplicate by URL — keep up to 4 listings per keyword to limit enrichment load
     const seen = new Set()
     const pool = []
     for (let i = 0; i < listingsByKeyword.length; i++) {
-      const kw = POPULAR_SEARCHES[i]
+      const { query, category } = POPULAR_SEARCHES[i]
       let count = 0
       for (const listing of listingsByKeyword[i]) {
         if (seen.has(listing.url)) continue
         if (!isGearListing(listing.title)) continue
         seen.add(listing.url)
-        pool.push({ ...listing, _keyword: kw })
+        pool.push({ ...listing, _keyword: query, category })
         count++
         if (count >= 4) break
       }
@@ -214,6 +225,7 @@ async function computeTopDeals() {
     //                                 trustworthy enough to feature as a top deal
     //   - isDealer === false        : dealer listings are already marked up; their "discount"
     //                                 vs used-market median is systematically misleading
+    // Store all qualified deals — client slices to top 10 per category view
     const scored = enriched
       .filter(l =>
         l.score &&
@@ -225,7 +237,6 @@ async function computeTopDeals() {
         !l.isDealer
       )
       .sort((a, b) => b.score.total - a.score.total)
-      .slice(0, 10)
 
     _cache = {
       deals: scored,
@@ -234,7 +245,7 @@ async function computeTopDeals() {
       error: null,
     }
 
-    console.log(`[TopDeals] Done. Top score: ${scored[0]?.score?.total ?? 'n/a'}, cached ${scored.length} deals.`)
+    console.log(`[TopDeals] Done. Top score: ${scored[0]?.score?.total ?? 'n/a'}, cached ${scored.length} qualified deals across ${POPULAR_SEARCHES.length} searches.`)
   } catch (err) {
     console.error('[TopDeals] Compute failed:', err.message)
     _cache.computing = false

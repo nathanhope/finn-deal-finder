@@ -14,6 +14,15 @@ function timeAgo(iso) {
   return `${Math.floor(diff / 3600)}t siden`
 }
 
+const CATEGORIES = [
+  { id: 'all',     label: 'Alle' },
+  { id: 'guitar',  label: 'Gitarer' },
+  { id: 'amp',     label: 'Forsterkere' },
+  { id: 'effects', label: 'Effekter' },
+  { id: 'studio',  label: 'Studio' },
+  { id: 'synth',   label: 'Synth/Keys' },
+]
+
 function RankBadge({ rank }) {
   const colors = {
     1: 'text-amber-300 border-amber-400/40 bg-amber-400/10',
@@ -28,7 +37,7 @@ function RankBadge({ rank }) {
 }
 
 function TopDealRow({ rank, listing, onSelect }) {
-  const { title, url, price, condition, image, score, dealSummary, isDealer } = listing
+  const { title, url, price, image, score, dealSummary, isDealer } = listing
   const savings = score?.savings
   const savingsPct = score?.savingsPct
 
@@ -97,6 +106,7 @@ function SkeletonRow() {
 export default function TopDeals({ onSelectListing }) {
   const [state, setState] = useState({ deals: [], computing: true, lastUpdated: null, error: null })
   const [refreshing, setRefreshing] = useState(false)
+  const [activeCategory, setActiveCategory] = useState('all')
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setState(s => ({ ...s, computing: true }))
@@ -111,7 +121,6 @@ export default function TopDeals({ onSelectListing }) {
 
   useEffect(() => {
     load()
-    // Poll every 2 minutes while computing, every 30 min once done
     const interval = setInterval(() => load(true), 2 * 60 * 1000)
     return () => clearInterval(interval)
   }, [load])
@@ -119,7 +128,6 @@ export default function TopDeals({ onSelectListing }) {
   const handleRefresh = async () => {
     setRefreshing(true)
     await fetch('/api/top-deals/refresh', { method: 'POST' })
-    // Poll until computing finishes
     const poll = setInterval(async () => {
       const res = await fetch('/api/top-deals')
       const data = await res.json()
@@ -131,7 +139,16 @@ export default function TopDeals({ onSelectListing }) {
     }, 3000)
   }
 
-  const isEmpty = !state.computing && state.deals.length === 0
+  const visibleDeals = activeCategory === 'all'
+    ? state.deals.slice(0, 10)
+    : state.deals.filter(d => d.category === activeCategory).slice(0, 10)
+
+  const isEmpty = !state.computing && visibleDeals.length === 0
+
+  // Only show category tabs that have at least one deal (except 'all')
+  const activeTabs = CATEGORIES.filter(cat =>
+    cat.id === 'all' || state.deals.some(d => d.category === cat.id)
+  )
 
   return (
     <div className="card overflow-hidden">
@@ -155,26 +172,48 @@ export default function TopDeals({ onSelectListing }) {
         </button>
       </div>
 
+      {/* Category tabs */}
+      {!state.computing && activeTabs.length > 1 && (
+        <div className="flex gap-1 px-3 py-2 border-b border-[#1f1f1f] overflow-x-auto">
+          {activeTabs.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={`px-3 py-1 rounded text-xs whitespace-nowrap transition-colors flex-shrink-0 ${
+                activeCategory === cat.id
+                  ? 'bg-[#2a2a2a] text-[#e8e0d0]'
+                  : 'text-[#9a9080] hover:text-[#e8e0d0]'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Body */}
       <div className="divide-y divide-[#1f1f1f]">
         {state.computing && state.deals.length === 0 ? (
-          // Computing for the first time — show skeletons + message
           <>
             <div className="px-4 py-3 text-xs text-[#9a9080] italic flex items-center gap-2">
               <span className="animate-spin inline-block">↻</span>
-              Skanner {15} populære søk etter de beste dealene — dette tar ~2 min første gang...
+              Skanner {20} populære søk etter de beste dealene — dette tar ~2 min første gang...
             </div>
             {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
           </>
         ) : isEmpty ? (
           <div className="px-4 py-8 text-center text-[#9a9080] text-sm">
-            Ingen scorede deals funnet ennå.
-            <button onClick={handleRefresh} className="block mx-auto mt-2 text-amber-400 hover:text-amber-300 text-xs underline">
-              Prøv igjen
-            </button>
+            {activeCategory === 'all'
+              ? 'Ingen scorede deals funnet ennå.'
+              : `Ingen deals i denne kategorien ennå.`}
+            {activeCategory === 'all' && (
+              <button onClick={handleRefresh} className="block mx-auto mt-2 text-amber-400 hover:text-amber-300 text-xs underline">
+                Prøv igjen
+              </button>
+            )}
           </div>
         ) : (
-          state.deals.map((listing, i) => (
+          visibleDeals.map((listing, i) => (
             <TopDealRow
               key={listing.url}
               rank={i + 1}
@@ -185,10 +224,10 @@ export default function TopDeals({ onSelectListing }) {
         )}
       </div>
 
-      {/* Footer — category breakdown */}
+      {/* Footer */}
       {!state.computing && state.deals.length > 0 && (
         <div className="px-4 py-2 border-t border-[#1f1f1f] text-xs text-[#4a4040]">
-          Basert på {15} søkeord · oppdateres hvert 30. minutt
+          Basert på {20} søkeord · oppdateres hvert 30. minutt
         </div>
       )}
     </div>
