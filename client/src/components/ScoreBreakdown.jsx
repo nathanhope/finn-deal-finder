@@ -76,6 +76,28 @@ export default function ScoreBreakdown({ score, priceData, modelQuery, finnPrice
             {reverb?.sampleSize ? <span className="text-[#6a6060] ml-1">({reverb.sampleSize} salg)</span> : null}
           </span>
         </div>
+        {reverb?.sampleListings?.length > 0 && (
+          <div className="pl-2 space-y-0.5 mt-0.5">
+            {reverb.sampleListings.map((l, i) => (
+              <div key={i} className="flex justify-between items-baseline gap-2">
+                {l.url ? (
+                  <a
+                    href={l.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#5a5050] hover:text-amber-400 transition-colors truncate text-[11px]"
+                    title={l.title}
+                  >
+                    {l.title || 'Reverb listing'} ↗
+                  </a>
+                ) : (
+                  <span className="text-[#5a5050] truncate text-[11px]">{l.title || '—'}</span>
+                )}
+                <span className="mono text-[#6a6060] text-[11px] flex-shrink-0">{fmt(l.price)}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex justify-between">
           <span className="text-[#9a9080]">eBay (solgt)</span>
           <span className="mono text-[#e8e0d0]">
