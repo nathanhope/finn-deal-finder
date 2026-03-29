@@ -13,6 +13,37 @@ const HEADERS = {
   'User-Agent': 'GearFindNO/1.0',
 }
 
+/**
+ * Remove lower price tier when the sample contains two distinct product classes
+ * (e.g. dust covers + actual cabinets). Detects the largest relative price gap:
+ * if next price is 3x+ the current price AND the upper tier has ≥3 items AND
+ * the lower tier is ≥40% of the sample, the lower tier is discarded.
+ */
+function removeLowerPriceTier(prices) {
+  if (prices.length < 6) return prices
+  const sorted = [...prices].sort((a, b) => a - b)
+
+  let maxGapRatio = 0
+  let maxGapIdx = -1
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const ratio = (sorted[i + 1] - sorted[i]) / sorted[i]
+    if (ratio > maxGapRatio) {
+      maxGapRatio = ratio
+      maxGapIdx = i
+    }
+  }
+
+  const lowerCount = maxGapIdx + 1
+  const upperCount = sorted.length - lowerCount
+  const lowerFraction = lowerCount / sorted.length
+
+  if (maxGapRatio > 2.0 && lowerFraction >= 0.4 && upperCount >= 3) {
+    return sorted.slice(maxGapIdx + 1)
+  }
+
+  return prices
+}
+
 async function fetchReverbPrices(modelQuery) {
   const cacheKey = `reverb:${modelQuery.toLowerCase()}`
   const cached = cache.get(cacheKey)
@@ -51,12 +82,17 @@ async function fetchReverbPrices(modelQuery) {
       return null
     }
 
-    const med = median(prices)
-    const avg = prices.reduce((a, b) => a + b, 0) / prices.length
+    // Detect accessory contamination: if there's a large price gap in the sample
+    // with the lower tier dominating (e.g. dust covers mixed with cabinets),
+    // discard the lower tier and score against the upper tier only.
+    const cleanedPrices = removeLowerPriceTier(prices)
+
+    const med = median(cleanedPrices)
+    const avg = cleanedPrices.reduce((a, b) => a + b, 0) / cleanedPrices.length
     const result = {
       median: Math.round(med),
       average: Math.round(avg),
-      sampleSize: prices.length,
+      sampleSize: cleanedPrices.length,
       currency: 'NOK',
       lowConfidence: prices.length < 3,
       searchUrl: `https://reverb.com/marketplace?query=${encodeURIComponent(modelQuery)}&condition=sold`,
