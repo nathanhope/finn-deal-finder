@@ -240,9 +240,21 @@ app.get('/api/search', async (req, res) => {
       }
     }
 
-    // 4. Apply min score filter
+    // 4. Filter query-irrelevant listings
+    // finn.no sometimes returns listings where sellers stuffed unrelated keywords
+    // in descriptions. If none of the user's search tokens appear in the listing
+    // title or extracted model query, discard it.
+    const searchTokens = q.trim().toLowerCase().split(/\s+/).filter(t => t.length > 2)
+    const relevanceFiltered = searchTokens.length >= 2
+      ? enriched.filter(l => {
+          const haystack = (l.title + ' ' + (l.modelQuery || '')).toLowerCase()
+          return searchTokens.some(t => haystack.includes(t))
+        })
+      : enriched
+
+    // 5. Apply min score filter
     const minScoreInt = parseInt(minScore, 10) || 0
-    let filtered = enriched.filter(l => {
+    let filtered = relevanceFiltered.filter(l => {
       if (!l.score) return minScoreInt === 0
       return l.score.total >= minScoreInt
     })
