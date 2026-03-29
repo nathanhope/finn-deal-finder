@@ -45,7 +45,7 @@ export default function SearchBar({ onSearch, loading, onOpenFilters, activeFilt
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Søk etter gear — f.eks. &quot;Fender Stratocaster&quot; eller &quot;UA Apollo&quot;"
+            placeholder="Søk etter gear, eller lim inn en finn.no-lenke for å score den"
             className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded px-4 py-3 text-[#e8e0d0] placeholder-[#9a9080] text-sm focus:outline-none focus:border-amber-500/60 transition-colors"
             autoFocus
           />

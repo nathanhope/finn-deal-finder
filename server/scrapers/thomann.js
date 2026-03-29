@@ -1,3 +1,8 @@
+// NOTE: Thomann.de is protected by Cloudflare and cannot be scraped server-side.
+// fetchThomannPrice always returns null; the scoring engine reweights to 57/43
+// (market discount + condition) when Thomann data is unavailable.
+// To restore this feature, a paid scraping proxy (e.g. ScraperAPI, Apify) would be needed.
+
 const axios = require('axios')
 const cheerio = require('cheerio')
 const NodeCache = require('node-cache')
@@ -29,6 +34,8 @@ function parseThomPrice(text) {
 }
 
 async function fetchThomannPrice(modelQuery) {
+  return null // Cloudflare-protected, see note at top of file
+
   const cacheKey = `thomann:${modelQuery.toLowerCase()}`
   const cached = cache.get(cacheKey)
   if (cached !== undefined) return cached

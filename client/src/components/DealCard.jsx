@@ -15,6 +15,35 @@ function fmt(n) {
   return n.toLocaleString('no-NO') + ' kr'
 }
 
+const NEW_PRICE_LABELS = {
+  evenstad:   'Evenstad Musikk',
+  thomann:    'Thomann',
+  gear4music: 'Gear4Music',
+  ebay_new:   'eBay',
+  reverb_new: 'Reverb',
+}
+
+const VERDICT = {
+  great:    { label: 'Veldig god deal', dot: 'bg-green-400',  text: 'text-green-400' },
+  good:     { label: 'God deal',        dot: 'bg-green-500',  text: 'text-green-500' },
+  fair:     { label: 'Grei pris',       dot: 'bg-amber-400',  text: 'text-amber-400' },
+  market:   { label: 'Rundt markedspris', dot: 'bg-[#5a5a5a]', text: 'text-[#9a9080]' },
+  over:     { label: 'Overpriset',      dot: 'bg-red-500',    text: 'text-red-400'   },
+  nodata:   { label: 'Mangler prisdata', dot: 'bg-[#3a3a3a]', text: 'text-[#6a6060]' },
+}
+
+function getVerdict(score) {
+  if (!score || !score.hasMarketData) return { ...VERDICT.nodata, detail: null }
+  const { total, savings, savingsPct } = score
+  if (savings < 0) {
+    return { ...VERDICT.over,   detail: `${Math.abs(savingsPct)}% over markedspris` }
+  }
+  if (total >= 70) return { ...VERDICT.great,  detail: `Spar ${fmt(savings)} (${savingsPct}%)` }
+  if (total >= 50) return { ...VERDICT.good,   detail: `${savingsPct}% under markedspris` }
+  if (total >= 25) return { ...VERDICT.fair,   detail: `${savingsPct}% under markedspris` }
+  return { ...VERDICT.market, detail: savingsPct > 0 ? `${savingsPct}% under markedspris` : null }
+}
+
 function SavingsBadge({ savings, savingsPct }) {
   if (!savings || savings <= 0) return null
   const isGreat = savingsPct >= 30
@@ -29,13 +58,14 @@ function SavingsBadge({ savings, savingsPct }) {
   )
 }
 
-export default function DealCard({ listing }) {
-  const [expanded, setExpanded] = useState(false)
+export default function DealCard({ listing, initialExpanded = false }) {
+  const [expanded, setExpanded] = useState(initialExpanded)
   const [copied, setCopied] = useState(false)
 
   const { title, url, price, condition, image, isDealer, score, priceData, modelQuery, publishedAt, dealSummary } = listing
 
   const conditionClass = CONDITION_COLORS[condition] || CONDITION_COLORS['Ikke oppgitt']
+  const verdict = getVerdict(score)
 
   const copyLink = async (e) => {
     e.stopPropagation()
@@ -98,16 +128,41 @@ export default function DealCard({ listing }) {
             <ScoreRing score={score?.total ?? null} size={64} />
           </div>
 
-          {/* Prices */}
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
-            <span className="mono font-bold text-lg text-[#e8e0d0]">{fmt(price)}</span>
-            {score?.marketPrice && (
-              <span className="mono text-sm text-[#9a9080] line-through">{fmt(score.marketPrice)}</span>
+          {/* Verdict */}
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${verdict.dot}`} />
+            <span className={`text-sm font-semibold ${verdict.text}`}>{verdict.label}</span>
+            {verdict.detail && (
+              <span className="text-xs text-[#6a6060]">— {verdict.detail}</span>
             )}
+            {score?.lowConfidence && (
+              <span className="text-xs text-[#5a5050]">(usikker)</span>
+            )}
+          </div>
+
+          {/* Prices */}
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-1">
+            <span className="mono font-bold text-lg text-[#e8e0d0]">{fmt(price)}</span>
             {score?.savings > 0 && (
               <SavingsBadge savings={score.savings} savingsPct={score.savingsPct} />
             )}
           </div>
+
+          {/* Market context — labeled used & new prices */}
+          {(score?.marketPrice || priceData?.newPrice?.newPrice) && (
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 mb-2">
+              {score?.marketPrice > 0 && (
+                <span className="text-xs text-[#6a6060]">
+                  Brukt marked: <span className="mono text-[#9a9080]">{fmt(score.marketPrice)}</span>
+                </span>
+              )}
+              {priceData?.newPrice?.newPrice && (
+                <span className="text-xs text-[#6a6060]">
+                  Ny ({NEW_PRICE_LABELS[priceData.newPrice.source] ?? 'Ny pris'}): <span className="mono text-[#9a9080]">{fmt(priceData.newPrice.newPrice)}</span>
+                </span>
+              )}
+            </div>
+          )}
 
           {/* AI deal summary */}
           {dealSummary && (
@@ -128,11 +183,6 @@ export default function DealCard({ listing }) {
               <span className="text-xs px-2 py-0.5 rounded-full border border-yellow-600/30 bg-yellow-600/10 text-yellow-500 flex items-center gap-1">
                 <span>⚠</span> Forhandler
               </span>
-            )}
-
-            {/* Low confidence */}
-            {score?.lowConfidence && (
-              <span className="text-xs text-amber-500/60" title="Lavt datagrunnlag">~ usikker score</span>
             )}
 
             {/* Date */}

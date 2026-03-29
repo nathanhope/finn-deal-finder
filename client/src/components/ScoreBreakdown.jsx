@@ -20,11 +20,20 @@ function fmt(n) {
   return n.toLocaleString('no-NO') + ' kr'
 }
 
+const NEW_PRICE_LABELS = {
+  evenstad:   'Evenstad Musikk (ny)',
+  thomann:    'Thomann (ny)',
+  gear4music: 'Gear4Music (ny)',
+  ebay_new:   'eBay (ny)',
+  reverb_new: 'Reverb (ny)',
+}
+
 export default function ScoreBreakdown({ score, priceData, modelQuery }) {
   if (!score) return null
 
   const { breakdown, marketPrice, savings, savingsPct, lowConfidence, hasMarketData, hasThomannData } = score
-  const { reverb, ebay, thomann } = priceData || {}
+  const { reverb, ebay, thomann, gear4music, reverbNew, newPrice } = priceData || {}
+  const newPriceLabel = NEW_PRICE_LABELS[newPrice?.source] || 'Ny pris'
 
   const barColor = (v) => {
     if (v == null) return '#3a3a3a'
@@ -75,9 +84,12 @@ export default function ScoreBreakdown({ score, priceData, modelQuery }) {
           </span>
         </div>
         <div className="flex justify-between border-t border-[#2a2a2a] pt-1.5 mt-1.5">
-          <span className="text-[#9a9080]">Thomann (ny)</span>
+          <span className="text-[#9a9080]">{newPriceLabel}</span>
           <span className="mono text-[#e8e0d0]">
-            {thomann?.newPrice ? fmt(thomann.newPrice) : '—'}
+            {newPrice?.newPrice ? fmt(newPrice.newPrice) : '—'}
+            {newPrice?.newPrice && gear4music?.url && (
+              <a href={gear4music.url} target="_blank" rel="noopener noreferrer" className="text-[#6a6060] hover:text-amber-400 ml-1 text-[10px]">↗</a>
+            )}
           </span>
         </div>
         {marketPrice && (

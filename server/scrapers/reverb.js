@@ -71,4 +71,57 @@ async function fetchReverbPrices(modelQuery) {
   }
 }
 
-module.exports = { fetchReverbPrices }
+/**
+ * Fetch the current new/B-stock street price for a model from Reverb dealer listings.
+ * Returns the lowest available new price as a proxy for current retail/MAP pricing.
+ * Cached 12h (new prices change less frequently than sold data).
+ */
+async function fetchReverbNewPrice(modelQuery) {
+  const cacheKey = `reverb:new:${modelQuery.toLowerCase()}`
+  const cached = cache.get(cacheKey)
+  if (cached !== undefined) return cached
+
+  try {
+    const { data } = await axios.get(`${REVERB_API}/listings`, {
+      headers: HEADERS,
+      params: {
+        query: modelQuery,
+        item_condition: 'brand_new,b_stock',
+        per_page: 10,
+        sort: 'price_asc',
+      },
+      timeout: 8000,
+    })
+
+    const listings = data?.listings || data?._embedded?.listings || []
+
+    const prices = []
+    for (const listing of listings) {
+      const amount = parseFloat(listing?.price?.amount)
+      const currency = listing?.price?.currency || 'USD'
+      if (!amount || isNaN(amount)) continue
+      const nok = await convertToNOK(amount, currency)
+      if (nok) prices.push(nok)
+    }
+
+    if (!prices.length) {
+      cache.set(cacheKey, null, 43200)
+      return null
+    }
+
+    prices.sort((a, b) => a - b)
+    const result = {
+      newPrice: Math.round(prices[0]),
+      sampleSize: prices.length,
+      source: 'reverb',
+    }
+    cache.set(cacheKey, result, 43200) // 12h
+    return result
+  } catch (err) {
+    console.error(`Reverb new price error for "${modelQuery}":`, err.message)
+    cache.set(cacheKey, null, 43200)
+    return null
+  }
+}
+
+module.exports = { fetchReverbPrices, fetchReverbNewPrice }

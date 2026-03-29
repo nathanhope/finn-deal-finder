@@ -22,6 +22,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const [isUrlScore, setIsUrlScore] = useState(false)
   const [sort, setSort] = useState('score')
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -29,27 +30,39 @@ export default function App() {
 
   const handleSearch = useCallback(async (keyword) => {
     if (!keyword.trim()) return
+    const asUrl = /^https?:\/\/(www\.)?finn\.no\//i.test(keyword.trim())
+
     setLoading(true)
     setError(null)
     setHasSearched(true)
+    setIsUrlScore(asUrl)
     setLastQuery(keyword)
 
-    const params = new URLSearchParams({
-      q: keyword,
-      sort,
-      ...(filters.maxPrice < 50000 && { maxPrice: filters.maxPrice }),
-      ...(filters.minScore > 0 && { minScore: filters.minScore }),
-      ...(filters.condition !== 'any' && { condition: filters.condition }),
-    })
-
     try {
-      const res = await fetch(`/api/search?${params}`)
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `Server error ${res.status}`)
+      if (asUrl) {
+        const res = await fetch(`/api/score?url=${encodeURIComponent(keyword.trim())}`)
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || `Server error ${res.status}`)
+        }
+        const data = await res.json()
+        setResults(data.result ? [data.result] : [])
+      } else {
+        const params = new URLSearchParams({
+          q: keyword,
+          sort,
+          ...(filters.maxPrice < 50000 && { maxPrice: filters.maxPrice }),
+          ...(filters.minScore > 0 && { minScore: filters.minScore }),
+          ...(filters.condition !== 'any' && { condition: filters.condition }),
+        })
+        const res = await fetch(`/api/search?${params}`)
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || `Server error ${res.status}`)
+        }
+        const data = await res.json()
+        setResults(data.results || [])
       }
-      const data = await res.json()
-      setResults(data.results || [])
     } catch (err) {
       setError(err.message)
       setResults([])
@@ -104,7 +117,7 @@ export default function App() {
         </div>
 
         {/* Results controls */}
-        {hasSearched && !loading && (
+        {hasSearched && !loading && !isUrlScore && (
           <div className="flex items-center justify-between mb-4 gap-3">
             <span className="text-[#9a9080] text-sm mono">
               {results.length > 0
@@ -128,6 +141,11 @@ export default function App() {
             </div>
           </div>
         )}
+        {hasSearched && !loading && isUrlScore && results.length > 0 && (
+          <div className="mb-4">
+            <span className="text-[#9a9080] text-xs mono">Score for finn.no-annonse</span>
+          </div>
+        )}
 
         {/* Error state */}
         {error && (
@@ -149,7 +167,7 @@ export default function App() {
         {!loading && results.length > 0 && (
           <div className="space-y-3">
             {results.map(listing => (
-              <DealCard key={listing.id} listing={listing} />
+              <DealCard key={listing.id} listing={listing} initialExpanded={isUrlScore} />
             ))}
           </div>
         )}
@@ -158,10 +176,19 @@ export default function App() {
         {!loading && hasSearched && results.length === 0 && !error && (
           <div className="text-center py-20">
             <div className="text-5xl mb-4 select-none opacity-30">◈</div>
-            <p className="text-[#9a9080] mb-2">Ingen deals funnet for <span className="text-[#e8e0d0]">"{lastQuery}"</span></p>
-            <p className="text-[#9a9080] text-sm">
-              Prøv å senke minimum score-grensen, juster filtrene, eller søk på et annet søkeord.
-            </p>
+            {isUrlScore ? (
+              <>
+                <p className="text-[#9a9080] mb-2">Kunne ikke hente annonsen</p>
+                <p className="text-[#9a9080] text-sm">Sjekk at lenken er en aktiv finn.no-annonse og prøv igjen.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-[#9a9080] mb-2">Ingen deals funnet for <span className="text-[#e8e0d0]">"{lastQuery}"</span></p>
+                <p className="text-[#9a9080] text-sm">
+                  Prøv å senke minimum score-grensen, juster filtrene, eller søk på et annet søkeord.
+                </p>
+              </>
+            )}
           </div>
         )}
 
@@ -186,8 +213,11 @@ export default function App() {
               </div>
             </div>
             <TopDeals onSelectListing={(listing) => {
-              // Clicking a top deal row populates search with its model query
-              handleSearch(listing.modelQuery || listing.title.split(' ').slice(0, 3).join(' '))
+              setResults([listing])
+              setHasSearched(true)
+              setIsUrlScore(true)
+              setLastQuery(listing.url)
+              window.scrollTo({ top: 0, behavior: 'smooth' })
             }} />
           </div>
         )}

@@ -14,10 +14,13 @@ function getClient() {
 const MODEL = () => process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
 /**
- * 1. Extract a clean marketable model name from a messy finn.no title.
- *    Falls back to the regex extractor if OpenAI is unavailable.
+ * 1. Extract a specific, tier-aware model query from a messy finn.no title.
+ *    The output is used directly as a Reverb/eBay search query, so specificity matters:
+ *    a vague query returns mixed-tier results and inflates/deflates the price estimate.
  *
  *    e.g. "Selger Apollo Twin mk2 Duo med strøm + usb - pent brukt" → "Universal Audio Apollo Twin MkII Duo"
+ *    e.g. "Gibson Les Paul Standard 2019" → "Gibson Les Paul Standard 2019"
+ *    e.g. "Epiphone Les Paul Custom" → "Epiphone Les Paul Custom"  (NOT "Gibson Les Paul")
  */
 async function aiExtractModel(rawTitle) {
   const cacheKey = `ai:model:${rawTitle.toLowerCase().trim()}`
@@ -28,15 +31,21 @@ async function aiExtractModel(rawTitle) {
     const resp = await getClient().chat.completions.create({
       model: MODEL(),
       temperature: 0,
-      max_tokens: 40,
+      max_tokens: 50,
       messages: [
         {
           role: 'system',
           content:
-            'You extract a clean, marketable music gear model name from Norwegian classified listing titles. ' +
-            'Return ONLY the brand + model string suitable for searching on Reverb or eBay — no condition words, ' +
-            'no accessories, no Norwegian filler. If you cannot identify the gear, return the best 3–4 word guess. ' +
-            'Reply with only the model string, nothing else.',
+            'You extract a specific, tier-aware music gear model query from Norwegian classified listing titles. ' +
+            'The query will be used to search Reverb and eBay sold listings — it must be specific enough to return ' +
+            'comparable items at the same price tier. Include: brand, model series, specific variant/tier if mentioned, ' +
+            'and approximate year if it appears in the title. Omit condition words, accessories, and Norwegian filler. ' +
+            'CRITICAL sub-brand rule: when a title mentions both a parent brand and a sub-brand, always use ONLY the sub-brand. ' +
+            '"Gibson Epiphone Les Paul" → "Epiphone Les Paul". "Fender Squier Stratocaster" → "Squier Stratocaster". ' +
+            'Epiphone and Squier sell for 3–5x less than their parent brands — confusing them destroys the price comparison. ' +
+            'Examples of good output: "Gibson Les Paul Standard 2019", "Fender American Professional Stratocaster", ' +
+            '"Epiphone Les Paul Custom", "Universal Audio Apollo Twin MkII Duo", "Korg Minilogue XD". ' +
+            'Reply with only the model query string, nothing else.',
         },
         {
           role: 'user',

@@ -142,4 +142,103 @@ async function fetchFinnListings(keyword) {
   return unique
 }
 
-module.exports = { fetchFinnListings }
+/**
+ * Fetch and parse a single finn.no listing page by URL.
+ * Supports both URL formats:
+ *   - /recommerce/forsale/item/XXXXXXX
+ *   - /bap/forsale/ad.html?finnkode=XXXXXXX
+ */
+async function fetchFinnListing(url) {
+  const cacheKey = `finn:listing:${url}`
+  const cached = cache.get(cacheKey)
+  if (cached) return cached
+
+  let html
+  try {
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 12000 })
+    html = data
+  } catch (err) {
+    console.error(`finn.no listing fetch error for ${url}:`, err.message)
+    return null
+  }
+
+  const $ = cheerio.load(html)
+
+  // Title
+  const title = $('h1').first().text().trim()
+  if (!title || title.length < 2) return null
+
+  // Price — rendered as element with class "h2" (div or p depending on listing type)
+  const priceText = $('.h2').first().text()
+  const price = parsePrice(priceText)
+  if (!price) return null
+
+  // Condition — <b> inside a <span> containing "Tilstand:"
+  let condition = 'Ikke oppgitt'
+  $('section span').each((_, el) => {
+    if ($(el).text().includes('Tilstand')) {
+      const bText = $(el).find('b').first().text().trim()
+      if (bText) {
+        const parsed = parseConditionBadge(bText)
+        if (parsed) condition = parsed
+      }
+      return false
+    }
+  })
+
+  // Description — section containing "Beskrivelse av varen"
+  // Include full section text for AI condition inference; strip the heading
+  let description = null
+  $('section').each((_, el) => {
+    const text = $(el).text()
+    if (text.includes('Beskrivelse av varen')) {
+      description = text.replace(/Beskrivelse av varen/gi, '').trim().substring(0, 1500)
+      return false
+    }
+  })
+
+  // Image — prefer 960w listing images; fall back to any finncdn image upscaled
+  let image = null
+  $('img').each((_, el) => {
+    const src = $(el).attr('src') || ''
+    if (src.includes('finncdn') && src.includes('960w')) {
+      image = src
+      return false
+    }
+  })
+  if (!image) {
+    $('img').each((_, el) => {
+      const src = $(el).attr('src') || ''
+      if (src.includes('finncdn') && !src.includes('profile') && !src.includes('480x480')) {
+        image = src.replace(/\/\d+w\//, '/960w/')
+        return false
+      }
+    })
+  }
+
+  // Extract listing ID from URL path (/item/XXXX) or query (?finnkode=XXXX)
+  let id = url
+  try {
+    const u = new URL(url)
+    const pathMatch = u.pathname.match(/\/(\d{6,})(?:\/|$)/)
+    id = u.searchParams.get('finnkode') || pathMatch?.[1] || url
+  } catch { /* keep url as id */ }
+
+  const result = {
+    id,
+    title,
+    url,
+    price,
+    condition,
+    description,
+    image,
+    publishedAt: null,
+    isDealer: false,
+    source: 'finn.no',
+  }
+
+  cache.set(cacheKey, result)
+  return result
+}
+
+module.exports = { fetchFinnListings, fetchFinnListing }
