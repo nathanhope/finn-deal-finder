@@ -99,8 +99,13 @@ export default function App() {
       {/* Header */}
       <header className="border-b border-[#2a2a2a] sticky top-0 z-40 bg-[#0f0f0f]/95 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <span className="text-amber-400 text-xl select-none">◈</span>
-          <span className="font-semibold tracking-tight text-[#e8e0d0]">GearFind</span>
+          <button
+            onClick={() => { setHasSearched(false); setResults([]); setError(null); setIsUrlScore(false) }}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
+            <span className="text-amber-400 text-xl select-none">◈</span>
+            <span className="font-semibold tracking-tight text-[#e8e0d0]">GearFind</span>
+          </button>
           <span className="text-[#9a9080] text-sm hidden sm:inline">— finn.no deal scanner</span>
         </div>
       </header>
