@@ -31,7 +31,8 @@ const NON_GEAR_BLOCKLIST = [
   'klær', 'jakke', 'bukse', 'skjorte', 'sko ', 'støvler',
   'sofa', 'stol ', 'bord ', 'lampe', 'hylle', 'møbler',
   // Want-to-buy listings
-  'ønsker å kjøpe', 'søker ', 'wanted',
+  'ønsker å kjøpe', 'ønskes kjøpt', 'ønskes å kjøpe', 'leter etter',
+  'søker ', 'wanted', 'wtb',
   // Gaming hardware
   'playstation', 'xbox', 'nintendo', 'wii ',
   // Media / movies / TV

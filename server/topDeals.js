@@ -8,7 +8,8 @@ const NON_GEAR_BLOCKLIST = [
   'se bilder og liste', 'cd samling', 'plater til salgs',
   'klær', 'jakke', 'bukse', 'skjorte', 'sko ', 'støvler',
   'sofa', 'stol ', 'bord ', 'lampe', 'hylle', 'møbler',
-  'ønsker å kjøpe', 'søker ', 'wanted',
+  'ønsker å kjøpe', 'ønskes kjøpt', 'ønskes å kjøpe', 'leter etter',
+  'søker ', 'wanted', 'wtb',
   'playstation', 'xbox', 'nintendo', 'wii ',
   'dvd', 'blu-ray', 'bluray', 'blu ray', 'film ', 'filmer', 'serie ', 'serier',
   'covertrekk', 'støvdeksel', 'flightcase', 'flight case', 'gigbag', 'gig bag',
@@ -236,7 +237,7 @@ async function computeTopDeals() {
     const scored = enriched
       .filter(l =>
         l.score &&
-        l.score.total > 0 &&
+        l.score.total >= 35 &&
         l.score.hasMarketData &&
         l.price >= 500 &&
         (l.score.savings == null || l.score.savings >= 1500) &&

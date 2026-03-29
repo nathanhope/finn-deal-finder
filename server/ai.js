@@ -39,12 +39,17 @@ async function aiExtractModel(rawTitle) {
             'You extract a specific, tier-aware music gear model query from Norwegian classified listing titles. ' +
             'The query will be used to search Reverb and eBay sold listings — it must be specific enough to return ' +
             'comparable items at the same price tier. Include: brand, model series, specific variant/tier if mentioned, ' +
-            'and approximate year if it appears in the title. Omit condition words, accessories, and Norwegian filler. ' +
-            'CRITICAL sub-brand rule: when a title mentions both a parent brand and a sub-brand, always use ONLY the sub-brand. ' +
+            'and approximate year if it appears in the title. Omit condition words and Norwegian filler. ' +
+            'CRITICAL — item type disambiguation: if the title contains an item type word (pedal, effektpedal, forsterker, ' +
+            'amp, cabinet, kabinettet, synthesizer, interface, lydkort, mikrofon, etc.), you MUST include the item type ' +
+            'in the query. "FDR-1 Fender 65 Deluxe Reverb gitar effektpedal" → "Fender FDR-1 65 Deluxe Reverb pedal" NOT ' +
+            '"Fender 65 Deluxe Reverb" (which is an amp — wrong product type entirely). ' +
+            'CRITICAL — sub-brand rule: when a title mentions both a parent brand and a sub-brand, always use ONLY the sub-brand. ' +
             '"Gibson Epiphone Les Paul" → "Epiphone Les Paul". "Fender Squier Stratocaster" → "Squier Stratocaster". ' +
             'Epiphone and Squier sell for 3–5x less than their parent brands — confusing them destroys the price comparison. ' +
             'Examples of good output: "Gibson Les Paul Standard 2019", "Fender American Professional Stratocaster", ' +
-            '"Epiphone Les Paul Custom", "Universal Audio Apollo Twin MkII Duo", "Korg Minilogue XD". ' +
+            '"Epiphone Les Paul Custom", "Universal Audio Apollo Twin MkII Duo", "Korg Minilogue XD", ' +
+            '"Fender FDR-1 65 Deluxe Reverb pedal", "Marshall DSL40CR combo amp". ' +
             'Reply with only the model query string, nothing else.',
         },
         {
@@ -117,13 +122,18 @@ async function aiDealSummary({ title, finnPrice, marketPrice, thomannNew, condit
   const cached = cache.get(cacheKey)
   if (cached !== undefined) return cached
 
+  const aboveMarket = savingsPct != null && savingsPct < 0
   const context = [
     `Item: ${title}`,
     `Finn price: ${finnPrice} NOK`,
     marketPrice ? `Used market price (Reverb/eBay median): ${marketPrice} NOK` : null,
-    thomannNew ? `New from Thomann: ${thomannNew} NOK` : null,
+    thomannNew ? `New retail price: ${thomannNew} NOK` : null,
     `Condition: ${condition}`,
-    savingsPct != null ? `Discount vs market: ${savingsPct}%` : null,
+    savingsPct != null
+      ? (aboveMarket
+          ? `Price vs market: ${Math.abs(savingsPct)}% ABOVE market price (overpriced)`
+          : `Discount vs market: ${savingsPct}% below market price`)
+      : null,
     `Deal score: ${scoreTotal}/100`,
   ].filter(Boolean).join('\n')
 
