@@ -134,7 +134,7 @@ async function enrichListing(listing) {
   function newPriceValid(newP) {
     if (!newP) return false
     if (!usedMedian) return true
-    return newP >= usedMedian * 0.20 && newP <= usedMedian * 4.0
+    return newP >= usedMedian * 0.65 && newP <= usedMedian * 4.0
   }
   // Evenstad skipped for 2-token family queries (e.g. "Fender Stratocaster", "Gibson SG").
   // 3-token queries like "Korg Minilogue XD" are specific enough; price bounds handle the rest.

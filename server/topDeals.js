@@ -165,7 +165,7 @@ async function enrichListing(listing) {
   function newPriceValid(newP) {
     if (!newP) return false
     if (!usedMedian) return true
-    return newP >= usedMedian * 0.20 && newP <= usedMedian * 4.0
+    return newP >= usedMedian * 0.65 && newP <= usedMedian * 4.0
   }
   const queryTooShort  = tokens.length <= 2
   const evenstadValid  = (!queryTooShort && newPriceValid(evenstadData?.newPrice)) ? evenstadData : null
