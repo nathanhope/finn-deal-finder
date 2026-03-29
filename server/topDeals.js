@@ -36,7 +36,7 @@ const { fetchGear4MusicPrice } = require('./scrapers/gear4music')
 const { fetchEvenstadPrice } = require('./scrapers/evenstad')
 const { calculateDealScore } = require('./scoring')
 const { extractModel } = require('./utils/extractModel')
-const { aiAnalyzeListing, aiInferCondition, aiDealSummary } = require('./ai')
+const { aiAnalyzeListing, aiDealSummary } = require('./ai')
 
 const AI_ENABLED = !!process.env.OPENAI_API_KEY
 const REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 hours
@@ -65,8 +65,10 @@ function persistCache(data) {
 // Category-based discovery — broad Norwegian search terms that match all brands.
 // Each term returns the newest finn.no listings for that gear type regardless of brand.
 // MAX_PER_TERM controls how many listings per term enter the enrichment pool.
-// Keep this low: each listing costs 1 AI call + up to 4 scraper calls.
-const MAX_PER_TERM = 3
+// Needs to be high enough that each category has enough candidates with identifiable
+// brand+model titles — many listings from broad searches have vague titles that
+// yield no Reverb data and are filtered out. 8 per term × 5 guitar terms = 40 candidates.
+const MAX_PER_TERM = 8
 
 const CATEGORIES = [
   {
@@ -259,14 +261,13 @@ async function computeTopDeals() {
     }
 
     // Filter to listings with a real score, sort descending
-    // Qualification thresholds — each exists to block a specific failure mode:
-    //   - price >= 500 NOK          : rules out cheap accessories, vinyl, sample packs
-    //   - savings >= 1500 NOK       : a 96% discount on a 50 kr item is not a "deal"
-    //   - lowConfidence === false   : generic queries (e.g. "Fender Stratocaster") produce
-    //                                 mixed-tier Reverb medians — the % discount is not
-    //                                 trustworthy enough to feature as a top deal
-    //   - isDealer === false        : dealer listings are already marked up; their "discount"
-    //                                 vs used-market median is systematically misleading
+    // Qualification thresholds:
+    //   - score.total >= 35        : ~25% discount minimum (with typical condition weighting)
+    //   - hasMarketData            : must have Reverb or eBay median to score against
+    //   - price >= 500 NOK         : rules out cheap accessories, vinyl, sample packs
+    //   - savings >= 500 NOK       : ensures absolute savings are meaningful
+    //   - !isDealer                : dealer listings are already priced to market
+    // lowConfidence is shown as a warning badge in the UI, not a hard filter.
     // Store all qualified deals — client slices to top 10 per category view
     const scored = enriched
       .filter(l =>
