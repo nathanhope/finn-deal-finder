@@ -274,8 +274,7 @@ async function computeTopDeals() {
         l.score.total >= 35 &&
         l.score.hasMarketData &&
         l.price >= 500 &&
-        (l.score.savings == null || l.score.savings >= 800) &&
-        !l.score.lowConfidence &&
+        (l.score.savings == null || l.score.savings >= 500) &&
         !l.isDealer
       )
       .sort((a, b) => b.score.total - a.score.total)
