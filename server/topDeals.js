@@ -106,15 +106,19 @@ async function enrichListing(listing) {
     condition = await aiInferCondition(listing.description)
   }
 
-  const [reverbData, ebayData, thomannData, reverbNewData, ebayNewData, gear4mData, evenstadData] = await Promise.all([
+  // Thomann is excluded from bulk enrichment — ScraperAPI render=true takes 15-25s per
+  // request and would make a full refresh cycle take ~10 minutes. Evenstad covers NOK
+  // new prices; Reverb new / eBay new cover the rest. Thomann is used for single-listing
+  // scoring (/api/score) where the user expects a wait.
+  const [reverbData, ebayData, reverbNewData, ebayNewData, gear4mData, evenstadData] = await Promise.all([
     fetchReverbPrices(modelQuery),
     fetchEbayPrices(modelQuery),
-    fetchThomannPrice(modelQuery),
     fetchReverbNewPrice(modelQuery),
     fetchEbayNewPrice(modelQuery),
     fetchGear4MusicPrice(modelQuery),
     fetchEvenstadPrice(modelQuery),
   ])
+  const thomannData = null
 
   const usedMedian = reverbData?.median ?? ebayData?.median ?? null
   const tokens = modelQuery.trim().split(/\s+/)
