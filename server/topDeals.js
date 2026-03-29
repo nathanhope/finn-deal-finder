@@ -19,9 +19,15 @@ const NON_GEAR_BLOCKLIST = [
   'diverse pedaler', 'diverse effekter', 'samling av', 'pakke med',
 ]
 const VINYL_PATTERN = /^[A-Z][a-zA-ZÆØÅæøå\s]+ [-–] [A-Z][a-zA-ZÆØÅæøå\s]+$/
+// Norwegian-only copy/clone terms — these almost exclusively mean the instrument
+// is a replica and can't be scored against genuine brand prices.
+// English "clone" / "replica" are intentionally excluded: they appear in legitimate
+// product names (MXR Clone Looper, EHX Clone Theory, various replica finishes).
+const COPY_PATTERN = /\b(kopi|replika|klon)\b/i
 const isGearListing = (title) => {
   const lower = title.toLowerCase()
   if (NON_GEAR_BLOCKLIST.some(term => lower.includes(term))) return false
+  if (COPY_PATTERN.test(lower)) return false
   if (/^lp:/i.test(title.trim())) return false
   if (/\bpå lp\b/i.test(lower)) return false
   if (/\blp\b/.test(lower) && !/\blp\s*\d/.test(lower) && !/\b(les paul|low[- ]?pass)\b/i.test(lower)) return false
