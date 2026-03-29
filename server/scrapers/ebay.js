@@ -1,61 +1,70 @@
 const axios = require('axios')
+const cheerio = require('cheerio')
 const NodeCache = require('node-cache')
 const { convertToNOK } = require('../currency')
 const { median } = require('../scoring')
 
 const cache = new NodeCache({ stdTTL: 21600 }) // 6 hours
 
-const EBAY_API = 'https://svcs.ebay.com/services/search/FindingService/v1'
+const EBAY_BASE = 'https://www.ebay.com'
 
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+}
+
+/**
+ * Parse a price string from eBay's search results.
+ * Handles: "$1,299.99", "£899.00", "€1.199,00", "$100.00 to $200.00" (range → take first)
+ */
+function parseEbayPrice(text) {
+  if (!text) return null
+
+  let currency = 'USD'
+  if (text.includes('£'))               currency = 'GBP'
+  else if (text.includes('€'))          currency = 'EUR'
+  else if (/C\s*\$|CDN/.test(text))     currency = 'CAD'
+  else if (/AU\s*\$/.test(text))        currency = 'AUD'
+
+  // For ranges ("$100.00 to $200.00") take the first value
+  const match = text.match(/[\d,]+\.?\d*/)
+  if (!match) return null
+  const amount = parseFloat(match[0].replace(/,/g, ''))
+  return (!amount || isNaN(amount)) ? null : { amount, currency }
+}
+
+/**
+ * Fetch sold/completed eBay listing prices for a model query.
+ * Scrapes the completed listings page — no API key required.
+ */
 async function fetchEbayPrices(modelQuery) {
-  const appId = process.env.EBAY_APP_ID
-  if (!appId) {
-    console.warn('EBAY_APP_ID not set — skipping eBay lookup')
-    return null
-  }
-
   const cacheKey = `ebay:${modelQuery.toLowerCase()}`
   const cached = cache.get(cacheKey)
   if (cached !== undefined) return cached
 
+  const url = `${EBAY_BASE}/sch/i.html?_nkw=${encodeURIComponent(modelQuery)}&LH_Complete=1&LH_Sold=1&_ipg=48`
+
   try {
-    const { data } = await axios.get(EBAY_API, {
-      params: {
-        'OPERATION-NAME': 'findCompletedItems',
-        'SERVICE-NAME': 'FindingService',
-        'SERVICE-VERSION': '1.0.0',
-        'SECURITY-APPNAME': appId,
-        'RESPONSE-DATA-FORMAT': 'JSON',
-        'keywords': modelQuery,
-        'itemFilter(0).name': 'SoldItemsOnly',
-        'itemFilter(0).value': 'true',
-        'paginationInput.entriesPerPage': '20',
-        'outputSelector': 'SellerInfo',
-      },
-      timeout: 8000,
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 12000 })
+    const $ = cheerio.load(data)
+
+    const rawItems = []
+    $('.s-item').each((_, el) => {
+      const title = $(el).find('.s-item__title').text().trim()
+      if (!title || title.includes('Shop on eBay')) return
+      const priceText = $(el).find('.s-item__price').text().trim()
+      const parsed = parseEbayPrice(priceText)
+      if (parsed) rawItems.push(parsed)
     })
 
-    const response = data?.findCompletedItemsResponse?.[0]
-    const ack = response?.ack?.[0]
-    if (ack !== 'Success' && ack !== 'Warning') {
-      cache.set(cacheKey, null)
-      return null
-    }
-
-    const items = response?.searchResult?.[0]?.item || []
-    if (!items.length) {
+    if (!rawItems.length) {
       cache.set(cacheKey, null)
       return null
     }
 
     const prices = []
-    for (const item of items) {
-      const priceObj = item?.sellingStatus?.[0]?.currentPrice?.[0]
-      if (!priceObj) continue
-      const amount = parseFloat(priceObj.__value__)
-      const currency = priceObj['@currencyId'] || 'USD'
-      if (!amount || isNaN(amount)) continue
-
+    for (const { amount, currency } of rawItems) {
       const nok = await convertToNOK(amount, currency)
       if (nok) prices.push(nok)
     }
@@ -84,57 +93,36 @@ async function fetchEbayPrices(modelQuery) {
 }
 
 /**
- * Fetch the current lowest new price for a model from eBay active Fixed Price listings.
- * Uses condition ID 1000 (New). Returns the lowest NOK price as a retail/MAP proxy.
- * Cached 12h (new prices are stable day-to-day).
+ * Fetch the lowest current new/fixed-price listing on eBay as a retail price proxy.
+ * Uses Buy It Now + New condition, sorted by lowest price.
  */
 async function fetchEbayNewPrice(modelQuery) {
-  const appId = process.env.EBAY_APP_ID
-  if (!appId) return null
-
   const cacheKey = `ebay:new:${modelQuery.toLowerCase()}`
   const cached = cache.get(cacheKey)
   if (cached !== undefined) return cached
 
+  const url = `${EBAY_BASE}/sch/i.html?_nkw=${encodeURIComponent(modelQuery)}&LH_BIN=1&LH_ItemCondition=1000&_sop=15&_ipg=10`
+
   try {
-    const { data } = await axios.get(EBAY_API, {
-      params: {
-        'OPERATION-NAME': 'findItems',
-        'SERVICE-NAME': 'FindingService',
-        'SERVICE-VERSION': '1.0.0',
-        'SECURITY-APPNAME': appId,
-        'RESPONSE-DATA-FORMAT': 'JSON',
-        'keywords': modelQuery,
-        'itemFilter(0).name': 'Condition',
-        'itemFilter(0).value': '1000', // New
-        'itemFilter(1).name': 'ListingType',
-        'itemFilter(1).value': 'FixedPrice',
-        'sortOrder': 'PricePlusShippingLowest',
-        'paginationInput.entriesPerPage': '10',
-      },
-      timeout: 8000,
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 12000 })
+    const $ = cheerio.load(data)
+
+    const rawItems = []
+    $('.s-item').each((_, el) => {
+      const title = $(el).find('.s-item__title').text().trim()
+      if (!title || title.includes('Shop on eBay')) return
+      const priceText = $(el).find('.s-item__price').text().trim()
+      const parsed = parseEbayPrice(priceText)
+      if (parsed) rawItems.push(parsed)
     })
 
-    const response = data?.findItemsResponse?.[0]
-    const ack = response?.ack?.[0]
-    if (ack !== 'Success' && ack !== 'Warning') {
-      cache.set(cacheKey, null, 43200)
-      return null
-    }
-
-    const items = response?.searchResult?.[0]?.item || []
-    if (!items.length) {
+    if (!rawItems.length) {
       cache.set(cacheKey, null, 43200)
       return null
     }
 
     const prices = []
-    for (const item of items.slice(0, 5)) {
-      const priceObj = item?.sellingStatus?.[0]?.currentPrice?.[0]
-      if (!priceObj) continue
-      const amount = parseFloat(priceObj.__value__)
-      const currency = priceObj['@currencyId'] || 'USD'
-      if (!amount || isNaN(amount)) continue
+    for (const { amount, currency } of rawItems.slice(0, 5)) {
       const nok = await convertToNOK(amount, currency)
       if (nok) prices.push(nok)
     }

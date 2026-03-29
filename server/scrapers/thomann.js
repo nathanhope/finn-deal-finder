@@ -1,18 +1,23 @@
-// NOTE: Thomann.de is protected by Cloudflare and cannot be scraped server-side.
-// fetchThomannPrice always returns null; the scoring engine reweights to 57/43
-// (market discount + condition) when Thomann data is unavailable.
-// To restore this feature, a paid scraping proxy (e.g. ScraperAPI, Apify) would be needed.
-
 const axios = require('axios')
 const cheerio = require('cheerio')
 const NodeCache = require('node-cache')
 
 const cache = new NodeCache({ stdTTL: 86400 }) // 24 hours
 
+// Full modern Chrome fingerprint — best chance of passing Cloudflare's basic bot checks
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-  'Accept-Language': 'no,en-US;q=0.7,en;q=0.3',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+  'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'sec-ch-ua': '"Google Chrome";v="125", "Chromium";v="125", "Not=A?Brand";v="8"',
+  'sec-ch-ua-mobile': '?0',
+  'sec-ch-ua-platform': '"macOS"',
+  'sec-fetch-dest': 'document',
+  'sec-fetch-mode': 'navigate',
+  'sec-fetch-site': 'none',
+  'sec-fetch-user': '?1',
+  'upgrade-insecure-requests': '1',
 }
 
 // NOTE: Thomann's .no locale displays prices in NOK.
@@ -34,8 +39,6 @@ function parseThomPrice(text) {
 }
 
 async function fetchThomannPrice(modelQuery) {
-  return null // Cloudflare-protected, see note at top of file
-
   const cacheKey = `thomann:${modelQuery.toLowerCase()}`
   const cached = cache.get(cacheKey)
   if (cached !== undefined) return cached

@@ -349,7 +349,7 @@ if (process.env.NODE_ENV === 'production') {
 
 app.listen(PORT, () => {
   console.log(`\n🎸 GearFind server running on http://localhost:${PORT}`)
-  console.log(`   eBay API: ${process.env.EBAY_APP_ID ? '✓ configured' : '✗ not set (EBAY_APP_ID missing)'}`)
+  console.log(`   eBay: ✓ HTML scraper (no API key required)`)
   console.log(`   OpenAI: ${AI_ENABLED ? `✓ ${process.env.OPENAI_MODEL || 'gpt-4o-mini'}` : '✗ not set'}`)
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}\n`)
   // Start the top 10 engine in the background
