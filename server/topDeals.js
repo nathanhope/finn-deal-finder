@@ -45,8 +45,8 @@ const { extractModel } = require('./utils/extractModel')
 const { aiAnalyzeListing, aiDealSummary } = require('./ai')
 
 const AI_ENABLED = !!process.env.OPENAI_API_KEY
-const REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 hours
-const CACHE_MAX_AGE_MS    = 2 * 60 * 60 * 1000 // treat persisted cache as fresh for 2 hours
+const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6 hours
+const CACHE_MAX_AGE_MS    = 6 * 60 * 60 * 1000 // treat persisted cache as fresh for 6 hours
 const CACHE_FILE = path.join(__dirname, 'data', 'top-deals-cache.json')
 
 function loadPersistedCache() {
