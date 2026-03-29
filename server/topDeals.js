@@ -38,34 +38,41 @@ const { aiExtractModel, aiInferCondition, aiDealSummary } = require('./ai')
 const AI_ENABLED = !!process.env.OPENAI_API_KEY
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
 
-// Popular gear searched on finn.no — keyed by category for filtered top-deal views
-const POPULAR_SEARCHES = [
-  // guitars
-  { query: 'Fender Stratocaster',   category: 'guitar' },
-  { query: 'Gibson Les Paul',        category: 'guitar' },
-  { query: 'PRS',                    category: 'guitar' },
-  { query: 'Telecaster',             category: 'guitar' },
-  { query: 'Fender Jazz Bass',       category: 'guitar' },
-  // amps
-  { query: 'Marshall JCM',           category: 'amp' },
-  { query: 'Orange Rockerverb',      category: 'amp' },
-  { query: 'Fender Blues Junior',    category: 'amp' },
-  { query: 'Mesa Boogie',            category: 'amp' },
-  // effects
-  { query: 'Strymon',                category: 'effects' },
-  { query: 'Eventide H9',            category: 'effects' },
-  { query: 'Chase Bliss',            category: 'effects' },
-  // studio
-  { query: 'UA Apollo',              category: 'studio' },
-  { query: 'Focusrite Scarlett',     category: 'studio' },
-  { query: 'SSL 2',                  category: 'studio' },
-  { query: 'Neve 1073',              category: 'studio' },
-  // synth / keys
-  { query: 'Moog',                   category: 'synth' },
-  { query: 'Korg Minilogue',         category: 'synth' },
-  { query: 'Roland TR-8',            category: 'synth' },
-  { query: 'Nord Piano',             category: 'synth' },
+// Category-based discovery — broad Norwegian search terms that match all brands.
+// Each term returns the newest finn.no listings for that gear type regardless of brand.
+// MAX_PER_TERM controls how many listings per term enter the enrichment pool.
+const MAX_PER_TERM = 5
+
+const CATEGORIES = [
+  {
+    id: 'guitar',
+    label: 'Gitarer',
+    terms: ['elektrisk gitar', 'akustisk gitar', 'bass gitar', 'halvakustisk gitar', 'archtop gitar'],
+  },
+  {
+    id: 'amp',
+    label: 'Forsterkere',
+    terms: ['gitarforsterker', 'bassforsterker', 'combo forsterker', 'rørforsterker gitar'],
+  },
+  {
+    id: 'effects',
+    label: 'Effekter',
+    terms: ['effektpedal', 'gitarpedal', 'multieffekt gitar', 'loopstation', 'overdrive pedal'],
+  },
+  {
+    id: 'studio',
+    label: 'Studio',
+    terms: ['lydkort', 'kondensatormikrofon', 'preamp mikrofon', 'kompressor audio', 'audio interface'],
+  },
+  {
+    id: 'synth',
+    label: 'Synth/Keys',
+    terms: ['synthesizer', 'analog synth', 'digital piano', 'workstation keyboard', 'semi-modulær'],
+  },
 ]
+
+// Flatten to [{query, category}] for the fetch loop
+const ALL_TERMS = CATEGORIES.flatMap(cat => cat.terms.map(term => ({ query: term, category: cat.id })))
 
 // In-memory state
 let _cache = {
@@ -175,27 +182,27 @@ async function enrichListing(listing) {
 async function computeTopDeals() {
   if (_cache.computing) return
   _cache.computing = true
-  console.log('[TopDeals] Starting refresh across', POPULAR_SEARCHES.length, 'searches...')
+  console.log(`[TopDeals] Starting refresh — ${ALL_TERMS.length} category terms across ${CATEGORIES.length} categories...`)
 
   try {
-    // Fetch listings for all keywords in parallel — each keyword's enrichment is staggered internally
-    const listingsByKeyword = await Promise.all(
-      POPULAR_SEARCHES.map(({ query }) => fetchFinnListings(query).catch(() => []))
+    // Fetch all category terms in parallel
+    const listingsByTerm = await Promise.all(
+      ALL_TERMS.map(({ query }) => fetchFinnListings(query).catch(() => []))
     )
 
-    // Pool + deduplicate by URL — keep up to 4 listings per keyword to limit enrichment load
+    // Pool + deduplicate — keep up to MAX_PER_TERM newest listings per term
     const seen = new Set()
     const pool = []
-    for (let i = 0; i < listingsByKeyword.length; i++) {
-      const { query, category } = POPULAR_SEARCHES[i]
+    for (let i = 0; i < listingsByTerm.length; i++) {
+      const { query, category } = ALL_TERMS[i]
       let count = 0
-      for (const listing of listingsByKeyword[i]) {
+      for (const listing of listingsByTerm[i]) {
         if (seen.has(listing.url)) continue
         if (!isGearListing(listing.title)) continue
         seen.add(listing.url)
         pool.push({ ...listing, _keyword: query, category })
         count++
-        if (count >= 4) break
+        if (count >= MAX_PER_TERM) break
       }
     }
 
@@ -245,7 +252,7 @@ async function computeTopDeals() {
       error: null,
     }
 
-    console.log(`[TopDeals] Done. Top score: ${scored[0]?.score?.total ?? 'n/a'}, cached ${scored.length} qualified deals across ${POPULAR_SEARCHES.length} searches.`)
+    console.log(`[TopDeals] Done. Top score: ${scored[0]?.score?.total ?? 'n/a'}, cached ${scored.length} qualified deals from ${ALL_TERMS.length} category terms.`)
   } catch (err) {
     console.error('[TopDeals] Compute failed:', err.message)
     _cache.computing = false

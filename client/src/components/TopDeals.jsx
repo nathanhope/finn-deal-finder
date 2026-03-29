@@ -197,7 +197,7 @@ export default function TopDeals({ onSelectListing }) {
           <>
             <div className="px-4 py-3 text-xs text-[#9a9080] italic flex items-center gap-2">
               <span className="animate-spin inline-block">↻</span>
-              Skanner {20} populære søk etter de beste dealene — dette tar ~2 min første gang...
+              Skanner gitarer, forsterkere, effekter, studio og synth etter de beste dealene — dette tar ~2 min første gang...
             </div>
             {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
           </>
@@ -227,7 +227,7 @@ export default function TopDeals({ onSelectListing }) {
       {/* Footer */}
       {!state.computing && state.deals.length > 0 && (
         <div className="px-4 py-2 border-t border-[#1f1f1f] text-xs text-[#4a4040]">
-          Basert på {20} søkeord · oppdateres hvert 30. minutt
+          Basert på kategorisøk · oppdateres hvert 30. minutt
         </div>
       )}
     </div>
