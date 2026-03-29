@@ -65,7 +65,8 @@ function persistCache(data) {
 // Category-based discovery — broad Norwegian search terms that match all brands.
 // Each term returns the newest finn.no listings for that gear type regardless of brand.
 // MAX_PER_TERM controls how many listings per term enter the enrichment pool.
-const MAX_PER_TERM = 5
+// Keep this low: each listing costs 1 AI call + up to 4 scraper calls.
+const MAX_PER_TERM = 3
 
 const CATEGORIES = [
   {
@@ -124,28 +125,33 @@ async function enrichListing(listing) {
     modelQuery = extractModel(listing.title)
   }
 
-  let condition = listing.condition
-  if (AI_ENABLED && condition === 'Ikke oppgitt' && listing.description) {
-    condition = await aiInferCondition(listing.description)
-  }
+  // Skip aiInferCondition in the bulk pipeline — it's a sequential AI call per listing
+  // that adds ~1-2s each and doesn't meaningfully affect top-deal ranking.
+  // Single-listing scoring (/api/score) still uses it.
+  const condition = listing.condition
 
   // Thomann is excluded from bulk enrichment — ScraperAPI render=true takes 15-25s per
   // request and would make a full refresh cycle take ~10 minutes. Evenstad covers NOK
   // new prices; Reverb new / eBay new cover the rest. Thomann is used for single-listing
   // scoring (/api/score) where the user expects a wait.
-  const [reverbData, ebayData, reverbNewData, ebayNewData, gear4mData, evenstadData] = await Promise.all([
+  //
+  // eBay is a fallback — only called when Reverb has insufficient data (sampleSize < 5).
+  // This cuts ScraperAPI usage by ~80% and eliminates timeout cascades.
+  const [reverbData, reverbNewData, gear4mData, evenstadData] = await Promise.all([
     fetchReverbPrices(modelQuery),
-    fetchEbayPrices(modelQuery),
     fetchReverbNewPrice(modelQuery),
-    fetchEbayNewPrice(modelQuery),
     fetchGear4MusicPrice(modelQuery),
     fetchEvenstadPrice(modelQuery),
   ])
+  const needsEbay = !reverbData || reverbData.sampleSize < 5
+  const [ebayData, ebayNewData] = needsEbay
+    ? await Promise.all([fetchEbayPrices(modelQuery), fetchEbayNewPrice(modelQuery)])
+    : [null, null]
   const thomannData = null
 
   const usedMedian = reverbData?.median ?? ebayData?.median ?? null
   const tokens = modelQuery.trim().split(/\s+/)
-  const queryTooGeneric = tokens.length <= 2 && !/\d/.test(modelQuery)
+  const queryTooGeneric = tokens.length <= 1 && !/\d/.test(modelQuery)
   const lowConfidence = (reverbData?.lowConfidence ?? false) || queryTooGeneric
 
   function newPriceValid(newP) {
@@ -237,7 +243,10 @@ async function computeTopDeals() {
     // Enrich in batches of 5 (parallel within batch, 600ms between batches)
     const enriched = []
     const BATCH = 5
+    const totalBatches = Math.ceil(pool.length / BATCH)
     for (let i = 0; i < pool.length; i += BATCH) {
+      const batchNum = Math.floor(i / BATCH) + 1
+      console.log(`[TopDeals] Batch ${batchNum}/${totalBatches}...`)
       const batch = pool.slice(i, i + BATCH)
       const results = await Promise.all(
         batch.map(l => enrichListing(l).catch(err => {
@@ -265,7 +274,7 @@ async function computeTopDeals() {
         l.score.total >= 35 &&
         l.score.hasMarketData &&
         l.price >= 500 &&
-        (l.score.savings == null || l.score.savings >= 1500) &&
+        (l.score.savings == null || l.score.savings >= 800) &&
         !l.score.lowConfidence &&
         !l.isDealer
       )

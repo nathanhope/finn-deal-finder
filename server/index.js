@@ -339,6 +339,26 @@ app.post('/api/top-deals/refresh', (req, res) => {
   res.json({ message: 'Refresh triggered' })
 })
 
+// Debug endpoint — shows compute state without triggering a recompute
+app.get('/api/top-deals/debug', (req, res) => {
+  const state = getTopDeals()
+  res.json({
+    computing: state.computing,
+    dealCount: state.deals?.length ?? 0,
+    lastUpdated: state.lastUpdated,
+    error: state.error,
+    topScores: (state.deals || []).slice(0, 5).map(d => ({
+      title: d.title,
+      score: d.score?.total,
+      savings: d.score?.savings,
+      lowConfidence: d.score?.lowConfidence,
+      category: d.category,
+    })),
+    aiEnabled: !!process.env.OPENAI_API_KEY,
+    scraperApiEnabled: !!process.env.SCRAPERAPI_KEY,
+  })
+})
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })

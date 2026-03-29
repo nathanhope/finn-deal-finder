@@ -98,13 +98,15 @@ export default function ScoreBreakdown({ score, priceData, modelQuery, finnPrice
             ))}
           </div>
         )}
-        <div className="flex justify-between">
-          <span className="text-[#9a9080]">eBay (solgt)</span>
-          <span className="mono text-[#e8e0d0]">
-            {ebay?.median ? fmt(ebay.median) : '—'}
-            {ebay?.sampleSize ? <span className="text-[#6a6060] ml-1">({ebay.sampleSize} salg)</span> : null}
-          </span>
-        </div>
+        {ebay?.median ? (
+          <div className="flex justify-between">
+            <span className="text-[#9a9080]">eBay (solgt)</span>
+            <span className="mono text-[#e8e0d0]">
+              {fmt(ebay.median)}
+              {ebay.sampleSize ? <span className="text-[#6a6060] ml-1">({ebay.sampleSize} salg)</span> : null}
+            </span>
+          </div>
+        ) : null}
         <div className="flex justify-between border-t border-[#2a2a2a] pt-1.5 mt-1.5">
           <span className="text-[#9a9080]">{newPriceLabel}</span>
           <span className="mono text-[#e8e0d0]">
