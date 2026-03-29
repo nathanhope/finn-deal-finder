@@ -18,7 +18,7 @@ const CATEGORIES = [
   { id: 'all',    label: 'Alle' },
   { id: 'guitar', label: 'Guitar' },
   { id: 'bass',   label: 'Bass' },
-  { id: 'pedals', label: 'Pedals' },
+  { id: 'pedals', label: 'Guitar Pedals' },
   { id: 'studio', label: 'Studio' },
 ]
 

@@ -1,3 +1,5 @@
+const fs = require('fs')
+const path = require('path')
 const { fetchFinnListings } = require('./scrapers/finn')
 
 const NON_GEAR_BLOCKLIST = [
@@ -37,7 +39,28 @@ const { extractModel } = require('./utils/extractModel')
 const { aiAnalyzeListing, aiInferCondition, aiDealSummary } = require('./ai')
 
 const AI_ENABLED = !!process.env.OPENAI_API_KEY
-const REFRESH_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
+const REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 hours
+const CACHE_MAX_AGE_MS    = 2 * 60 * 60 * 1000 // treat persisted cache as fresh for 2 hours
+const CACHE_FILE = path.join(__dirname, 'data', 'top-deals-cache.json')
+
+function loadPersistedCache() {
+  try {
+    if (!fs.existsSync(CACHE_FILE)) return null
+    const data = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'))
+    const age = Date.now() - new Date(data.lastUpdated).getTime()
+    if (age > CACHE_MAX_AGE_MS) return null
+    return data
+  } catch { return null }
+}
+
+function persistCache(data) {
+  try {
+    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true })
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(data), 'utf8')
+  } catch (err) {
+    console.error('[TopDeals] Failed to persist cache:', err.message)
+  }
+}
 
 // Category-based discovery — broad Norwegian search terms that match all brands.
 // Each term returns the newest finn.no listings for that gear type regardless of brand.
@@ -57,7 +80,7 @@ const CATEGORIES = [
   },
   {
     id: 'pedals',
-    label: 'Pedals',
+    label: 'Guitar Pedals',
     terms: ['effektpedal', 'gitarpedal', 'multieffekt gitar', 'loopstation', 'overdrive pedal'],
   },
   {
@@ -254,6 +277,7 @@ async function computeTopDeals() {
       computing: false,
       error: null,
     }
+    persistCache(_cache)
 
     console.log(`[TopDeals] Done. Top score: ${scored[0]?.score?.total ?? 'n/a'}, cached ${scored.length} qualified deals from ${ALL_TERMS.length} category terms.`)
   } catch (err) {
@@ -264,9 +288,13 @@ async function computeTopDeals() {
 }
 
 function startTopDealsEngine() {
-  // Kick off immediately in background
-  computeTopDeals()
-  // Then refresh every 30 minutes
+  const persisted = loadPersistedCache()
+  if (persisted) {
+    _cache = { ...persisted, computing: false }
+    console.log(`[TopDeals] Loaded persisted cache (${persisted.deals.length} deals, age < 2h) — skipping immediate recompute`)
+  } else {
+    computeTopDeals()
+  }
   setInterval(computeTopDeals, REFRESH_INTERVAL_MS)
 }
 
