@@ -3,6 +3,7 @@ const cheerio = require('cheerio')
 const NodeCache = require('node-cache')
 const { convertToNOK } = require('../currency')
 const { median } = require('../scoring')
+const { proxyUrl } = require('../utils/proxy')
 
 const cache = new NodeCache({ stdTTL: 21600 }) // 6 hours
 
@@ -43,10 +44,10 @@ async function fetchEbayPrices(modelQuery) {
   const cached = cache.get(cacheKey)
   if (cached !== undefined) return cached
 
-  const url = `${EBAY_BASE}/sch/i.html?_nkw=${encodeURIComponent(modelQuery)}&LH_Complete=1&LH_Sold=1&_ipg=48`
+  const url = proxyUrl(`${EBAY_BASE}/sch/i.html?_nkw=${encodeURIComponent(modelQuery)}&LH_Complete=1&LH_Sold=1&_ipg=48`)
 
   try {
-    const { data } = await axios.get(url, { headers: HEADERS, timeout: 12000 })
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 20000 })
     const $ = cheerio.load(data)
 
     const rawItems = []
@@ -101,10 +102,10 @@ async function fetchEbayNewPrice(modelQuery) {
   const cached = cache.get(cacheKey)
   if (cached !== undefined) return cached
 
-  const url = `${EBAY_BASE}/sch/i.html?_nkw=${encodeURIComponent(modelQuery)}&LH_BIN=1&LH_ItemCondition=1000&_sop=15&_ipg=10`
+  const url = proxyUrl(`${EBAY_BASE}/sch/i.html?_nkw=${encodeURIComponent(modelQuery)}&LH_BIN=1&LH_ItemCondition=1000&_sop=15&_ipg=10`)
 
   try {
-    const { data } = await axios.get(url, { headers: HEADERS, timeout: 12000 })
+    const { data } = await axios.get(url, { headers: HEADERS, timeout: 20000 })
     const $ = cheerio.load(data)
 
     const rawItems = []

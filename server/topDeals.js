@@ -118,7 +118,7 @@ async function enrichListing(listing) {
 
   const usedMedian = reverbData?.median ?? ebayData?.median ?? null
   const tokens = modelQuery.trim().split(/\s+/)
-  const queryTooGeneric = tokens.length <= 3 && !/\d/.test(modelQuery)
+  const queryTooGeneric = tokens.length <= 2 && !/\d/.test(modelQuery)
   const lowConfidence = (reverbData?.lowConfidence ?? false) || queryTooGeneric
 
   function newPriceValid(newP) {

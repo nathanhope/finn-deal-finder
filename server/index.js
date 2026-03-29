@@ -120,7 +120,7 @@ async function enrichListing(listing) {
   // (e.g. "Gibson Les Paul", "Fender Stratocaster") with no tier/variant info — Reverb results
   // will be a mixed bag of price tiers. Flag as low confidence.
   const tokens = modelQuery.trim().split(/\s+/)
-  const queryTooGeneric = tokens.length <= 3 && !/\d/.test(modelQuery)
+  const queryTooGeneric = tokens.length <= 2 && !/\d/.test(modelQuery)
   const lowConfidence = (reverbData?.lowConfidence ?? false) || queryTooGeneric
 
   // New price sanity bounds — lower/upper relative to used median:
@@ -353,7 +353,8 @@ if (process.env.NODE_ENV === 'production') {
 
 app.listen(PORT, () => {
   console.log(`\n🎸 GearFind server running on http://localhost:${PORT}`)
-  console.log(`   eBay: ✓ HTML scraper (no API key required)`)
+  console.log(`   eBay: ✓ HTML scraper ${process.env.SCRAPERAPI_KEY ? '(via ScraperAPI proxy)' : '(direct — set SCRAPERAPI_KEY for reliable results)'}`)
+  console.log(`   Thomann: ${process.env.SCRAPERAPI_KEY ? '✓ via ScraperAPI (JS render)' : '✗ needs SCRAPERAPI_KEY to bypass Cloudflare'}`)
   console.log(`   OpenAI: ${AI_ENABLED ? `✓ ${process.env.OPENAI_MODEL || 'gpt-4o-mini'}` : '✗ not set'}`)
   console.log(`   Environment: ${process.env.NODE_ENV || 'development'}\n`)
   // Start the top 10 engine in the background
