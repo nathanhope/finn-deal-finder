@@ -28,7 +28,7 @@ const NEW_PRICE_LABELS = {
   reverb_new: 'Reverb (ny)',
 }
 
-export default function ScoreBreakdown({ score, priceData, modelQuery }) {
+export default function ScoreBreakdown({ score, priceData, modelQuery, finnPrice }) {
   if (!score) return null
 
   const { breakdown, marketPrice, savings, savingsPct, lowConfidence, hasMarketData, hasThomannData } = score
@@ -104,6 +104,11 @@ export default function ScoreBreakdown({ score, priceData, modelQuery }) {
       {lowConfidence && (
         <div className="text-xs text-amber-500/80 flex items-center gap-1.5">
           <span>⚠</span> Lavt datagrunnlag fra Reverb — score kan være unøyaktig
+        </div>
+      )}
+      {hasThomannData && breakdown.valueVsNew === 0 && finnPrice != null && newPrice?.newPrice && finnPrice >= newPrice.newPrice && (
+        <div className="text-xs text-[#6a6060] flex items-center gap-1.5">
+          <span>ℹ</span> Finn-prisen er over nypris — «Value vs new» = 0
         </div>
       )}
       {!hasMarketData && !hasThomannData && (

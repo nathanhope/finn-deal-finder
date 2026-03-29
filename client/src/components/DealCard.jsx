@@ -168,6 +168,11 @@ export default function DealCard({ listing, initialExpanded = false }) {
                   Ny ({NEW_PRICE_LABELS[priceData.newPrice.source] ?? 'Ny pris'}): <span className="mono text-[#9a9080]">{fmt(priceData.newPrice.newPrice)}</span>
                 </span>
               )}
+              {score?.marketPrice > 0 && priceData?.newPrice?.newPrice && score.marketPrice > priceData.newPrice.newPrice && (
+                <span className="text-xs text-[#5a5050] w-full">
+                  Bruktpriser over nypris — trolig utgått modell med restlager
+                </span>
+              )}
             </div>
           )}
 
@@ -226,6 +231,7 @@ export default function DealCard({ listing, initialExpanded = false }) {
           score={score}
           priceData={priceData}
           modelQuery={modelQuery}
+          finnPrice={price}
         />
       )}
     </article>
