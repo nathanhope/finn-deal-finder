@@ -62,7 +62,7 @@ export default function DealCard({ listing, initialExpanded = false }) {
   const [expanded, setExpanded] = useState(initialExpanded)
   const [copied, setCopied] = useState(false)
 
-  const { title, url, price, condition, image, isDealer, score, priceData, modelQuery, publishedAt, dealSummary } = listing
+  const { title, url, price, condition, image, isDealer, score, priceData, modelQuery, itemType, publishedAt, dealSummary } = listing
 
   const conditionClass = CONDITION_COLORS[condition] || CONDITION_COLORS['Ikke oppgitt']
   const verdict = getVerdict(score)
@@ -131,6 +131,7 @@ export default function DealCard({ listing, initialExpanded = false }) {
           {/* Scoring basis — shown when modelQuery exists so user can verify relevance */}
           {modelQuery && (
             <div className="text-xs text-[#4a4040] mb-1">
+              {itemType && <span className="text-[#5a5050] mr-2">{itemType}</span>}
               Scoret mot: <span className="text-[#6a6060]">{modelQuery}</span>
             </div>
           )}

@@ -14,16 +14,28 @@ function getClient() {
 const MODEL = () => process.env.OPENAI_MODEL || 'gpt-4o-mini'
 
 /**
- * 1. Extract a specific, tier-aware model query from a messy finn.no title.
- *    The output is used directly as a Reverb/eBay search query, so specificity matters:
- *    a vague query returns mixed-tier results and inflates/deflates the price estimate.
+ * 1. Analyze a finn.no listing title to produce a structured understanding of the item.
  *
- *    e.g. "Selger Apollo Twin mk2 Duo med strøm + usb - pent brukt" → "Universal Audio Apollo Twin MkII Duo"
- *    e.g. "Gibson Les Paul Standard 2019" → "Gibson Les Paul Standard 2019"
- *    e.g. "Epiphone Les Paul Custom" → "Epiphone Les Paul Custom"  (NOT "Gibson Les Paul")
+ *    Returns: { modelQuery, itemType, category }
+ *
+ *    modelQuery  — type-qualified search string for Reverb/eBay. Includes the item type
+ *                  whenever the brand name alone would match a different product class.
+ *                  e.g. "FDR-1 Fender 65 Deluxe Reverb effektpedal"
+ *                    → { modelQuery: "Fender FDR-1 65 Deluxe Reverb pedal",
+ *                        itemType: "effects pedal", category: "effects" }
+ *                  e.g. "Selger Apollo Twin mk2 Duo pent brukt"
+ *                    → { modelQuery: "Universal Audio Apollo Twin MkII Duo",
+ *                        itemType: "audio interface", category: "studio" }
+ *
+ *    itemType    — specific English product type: "combo amp" | "amp head" | "guitar cabinet" |
+ *                  "electric guitar" | "bass guitar" | "acoustic guitar" | "effects pedal" |
+ *                  "multi-effects" | "audio interface" | "condenser microphone" |
+ *                  "synthesizer" | "digital piano" | "drum machine" | etc.
+ *
+ *    category    — one of: guitar | amp | effects | studio | synth | other
  */
-async function aiExtractModel(rawTitle) {
-  const cacheKey = `ai:model:${rawTitle.toLowerCase().trim()}`
+async function aiAnalyzeListing(rawTitle) {
+  const cacheKey = `ai:analyze:${rawTitle.toLowerCase().trim()}`
   const cached = cache.get(cacheKey)
   if (cached !== undefined) return cached
 
@@ -31,26 +43,25 @@ async function aiExtractModel(rawTitle) {
     const resp = await getClient().chat.completions.create({
       model: MODEL(),
       temperature: 0,
-      max_tokens: 50,
+      max_tokens: 120,
+      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
           content:
-            'You extract a specific, tier-aware music gear model query from Norwegian classified listing titles. ' +
-            'The query will be used to search Reverb and eBay sold listings — it must be specific enough to return ' +
-            'comparable items at the same price tier. Include: brand, model series, specific variant/tier if mentioned, ' +
-            'and approximate year if it appears in the title. Omit condition words and Norwegian filler. ' +
-            'CRITICAL — item type disambiguation: if the title contains an item type word (pedal, effektpedal, forsterker, ' +
-            'amp, cabinet, kabinettet, synthesizer, interface, lydkort, mikrofon, etc.), you MUST include the item type ' +
-            'in the query. "FDR-1 Fender 65 Deluxe Reverb gitar effektpedal" → "Fender FDR-1 65 Deluxe Reverb pedal" NOT ' +
-            '"Fender 65 Deluxe Reverb" (which is an amp — wrong product type entirely). ' +
-            'CRITICAL — sub-brand rule: when a title mentions both a parent brand and a sub-brand, always use ONLY the sub-brand. ' +
-            '"Gibson Epiphone Les Paul" → "Epiphone Les Paul". "Fender Squier Stratocaster" → "Squier Stratocaster". ' +
-            'Epiphone and Squier sell for 3–5x less than their parent brands — confusing them destroys the price comparison. ' +
-            'Examples of good output: "Gibson Les Paul Standard 2019", "Fender American Professional Stratocaster", ' +
-            '"Epiphone Les Paul Custom", "Universal Audio Apollo Twin MkII Duo", "Korg Minilogue XD", ' +
-            '"Fender FDR-1 65 Deluxe Reverb pedal", "Marshall DSL40CR combo amp". ' +
-            'Reply with only the model query string, nothing else.',
+            'You analyze Norwegian music gear listing titles. Return a JSON object with exactly three fields:\n\n' +
+            '"modelQuery": A specific, type-qualified search string for Reverb/eBay sold listings. Rules:\n' +
+            '- Include the item type whenever the brand name alone would match a different product. ' +
+            '"FDR-1 Fender 65 Deluxe Reverb effektpedal" → "Fender FDR-1 65 Deluxe Reverb pedal" ' +
+            '(NOT "Fender 65 Deluxe Reverb" — that is an amp, completely different price tier). ' +
+            '"Marshall JCM800 topp" → "Marshall JCM800 amp head". ' +
+            '"Fender Blues Junior combo" → "Fender Blues Junior combo amp".\n' +
+            '- Sub-brand rule: use sub-brand only. "Gibson Epiphone Les Paul" → "Epiphone Les Paul". ' +
+            '"Fender Squier Strat" → "Squier Stratocaster". Epiphone/Squier sell for 3–5× less.\n' +
+            '- Include brand, specific model, variant/tier, year if present. Omit condition words and Norwegian filler.\n\n' +
+            '"itemType": The specific product type in English. Be precise: "combo amp" not "amp", ' +
+            '"effects pedal" not "pedal", "amp head" not "amp", "condenser microphone" not "microphone".\n\n' +
+            '"category": Exactly one of: guitar | amp | effects | studio | synth | other',
         },
         {
           role: 'user',
@@ -59,11 +70,22 @@ async function aiExtractModel(rawTitle) {
       ],
     })
 
-    const result = resp.choices[0]?.message?.content?.trim() || null
+    const raw = resp.choices[0]?.message?.content?.trim()
+    if (!raw) {
+      cache.set(cacheKey, null)
+      return null
+    }
+
+    const parsed = JSON.parse(raw)
+    const result = {
+      modelQuery: typeof parsed.modelQuery === 'string' ? parsed.modelQuery.trim() : null,
+      itemType:   typeof parsed.itemType   === 'string' ? parsed.itemType.trim()   : null,
+      category:   typeof parsed.category   === 'string' ? parsed.category.trim()   : null,
+    }
     cache.set(cacheKey, result)
     return result
   } catch (err) {
-    console.error('aiExtractModel error:', err.message)
+    console.error('aiAnalyzeListing error:', err.message)
     return null
   }
 }
@@ -209,4 +231,4 @@ async function aiIsRelevant(searchQuery, listingTitle) {
   }
 }
 
-module.exports = { aiExtractModel, aiInferCondition, aiDealSummary, aiIsRelevant }
+module.exports = { aiAnalyzeListing, aiInferCondition, aiDealSummary, aiIsRelevant }

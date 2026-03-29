@@ -34,7 +34,7 @@ const { fetchGear4MusicPrice } = require('./scrapers/gear4music')
 const { fetchEvenstadPrice } = require('./scrapers/evenstad')
 const { calculateDealScore } = require('./scoring')
 const { extractModel } = require('./utils/extractModel')
-const { aiExtractModel, aiInferCondition, aiDealSummary } = require('./ai')
+const { aiAnalyzeListing, aiInferCondition, aiDealSummary } = require('./ai')
 
 const AI_ENABLED = !!process.env.OPENAI_API_KEY
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
@@ -95,11 +95,13 @@ const GENERIC_TERMS = /^(electric\s+guitar|acoustic\s+guitar|bass\s+guitar|guita
 
 async function enrichListing(listing) {
   let modelQuery
+  let itemType = null
   if (AI_ENABLED) {
-    const aiResult = await aiExtractModel(listing.title)
-    modelQuery = (aiResult && !GENERIC_TERMS.test(aiResult.trim()))
-      ? aiResult
+    const aiResult = await aiAnalyzeListing(listing.title)
+    modelQuery = (aiResult?.modelQuery && !GENERIC_TERMS.test(aiResult.modelQuery.trim()))
+      ? aiResult.modelQuery
       : extractModel(listing.title)
+    itemType = aiResult?.itemType ?? null
   } else {
     modelQuery = extractModel(listing.title)
   }
@@ -165,6 +167,7 @@ async function enrichListing(listing) {
     ...listing,
     condition,
     modelQuery,
+    itemType,
     dealSummary,
     category: listing.category ?? null,
     priceData: {

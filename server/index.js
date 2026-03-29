@@ -11,7 +11,7 @@ const { fetchGear4MusicPrice } = require('./scrapers/gear4music')
 const { fetchEvenstadPrice } = require('./scrapers/evenstad')
 const { calculateDealScore } = require('./scoring')
 const { extractModel } = require('./utils/extractModel')
-const { aiExtractModel, aiInferCondition, aiDealSummary, aiIsRelevant } = require('./ai')
+const { aiAnalyzeListing, aiInferCondition, aiDealSummary, aiIsRelevant } = require('./ai')
 const { getTopDeals, startTopDealsEngine, computeTopDeals } = require('./topDeals')
 
 const AI_ENABLED = !!process.env.OPENAI_API_KEY
@@ -80,15 +80,17 @@ async function sleep(ms) {
  * Enrich a single finn listing with external price data and deal score.
  */
 async function enrichListing(listing) {
-  // 1. Extract model — prefer AI, fall back to regex
+  // 1. Analyze listing — AI returns {modelQuery, itemType, category}; fall back to regex
   // Reject AI output that is a useless generic term (no brand-specific signal)
   const GENERIC_TERMS = /^(electric\s+guitar|acoustic\s+guitar|bass\s+guitar|guitar|bass|keyboard|synthesizer|drum|amp(lifier)?)s?$/i
   let modelQuery
+  let itemType = null
   if (AI_ENABLED) {
-    const aiResult = await aiExtractModel(listing.title)
-    modelQuery = (aiResult && !GENERIC_TERMS.test(aiResult.trim()))
-      ? aiResult
+    const aiResult = await aiAnalyzeListing(listing.title)
+    modelQuery = (aiResult?.modelQuery && !GENERIC_TERMS.test(aiResult.modelQuery.trim()))
+      ? aiResult.modelQuery
       : extractModel(listing.title)
+    itemType = aiResult?.itemType ?? null
   } else {
     modelQuery = extractModel(listing.title)
   }
@@ -169,6 +171,7 @@ async function enrichListing(listing) {
     ...listing,
     condition,
     modelQuery,
+    itemType,
     dealSummary,
     priceData: {
       reverb: reverbData,
